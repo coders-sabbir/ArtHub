@@ -1,0 +1,25 @@
+{
+  "name": "arthub",
+  "private": true,
+  "workspaces": [
+    "client",
+    "server"
+  ],
+  "scripts": {
+    "dev": "concurrently -n api,web -c green,blue \"npm run dev -w server\" \"npm run dev -w client\"",
+    "build": "npm run build -w client",
+    "start": "concurrently -n api,web \"npm start -w server\" \"npm start -w client\"",
+    "seed": "npm run seed -w server",
+    "test": "npm test -w server && npm run typecheck -w client",
+    "setup": "node scripts/setup.mjs",
+    "db:start": "node scripts/local-mongo.mjs",
+    "test:e2e": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.64.0",
+    "concurrently": "^9.2.1"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

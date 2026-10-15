@@ -1,0 +1,13 @@
+services:
+  mongo:
+    image: mongo:8.0
+    command: ["mongod", "--replSet", "arthub", "--bind_ip_all", "--port", "27018"]
+    ports: ["127.0.0.1:27018:27018"]
+    volumes: ["arthub-mongo:/data/db"]
+    healthcheck:
+      test: ["CMD", "mongosh", "--port", "27018", "--quiet", "--eval", "try { rs.status().ok } catch { rs.initiate({_id:'arthub',members:[{_id:0,host:'localhost:27018'}]}) }"]
+      interval: 3s
+      timeout: 5s
+      retries: 20
+volumes:
+  arthub-mongo:
