@@ -1,0 +1,11 @@
+export type Role = 'user' | 'artist' | 'admin';
+export type User = { _id: string; name: string; email: string; role: Role; subscriptionTier: 'free' | 'pro' | 'premium'; purchaseCount: number; avatar: string; bio: string; wishlist: string[]; demo?: boolean; stripeSubscriptionId?: string };
+export type Comment = { _id: string; comment: string; userId: string; userName: string; createdAt: string };
+export type Artwork = { _id: string; title: string; description: string; artistId: string; artistName: string; image: string; price: number; category: string; createdAt: string; sold: boolean; demo?: boolean; originalArtist?: string; sourceUrl?: string; sourceMuseum?: string; medium?: string; artist?: { name: string; bio: string; avatar: string }; comments?: Comment[] };
+export type Catalog = { items: Artwork[]; total: number; page: number; pages: number };
+export type Artist = { _id: string; name: string; avatar: string; bio: string; image?: string; sales?: number; artworks?: number };
+export type Transaction = { _id: string; externalId: string; userId: string; userName: string; userEmail: string; artistId: string; artworkId: string; title: string; image: string; artistName: string; amount: number; type: string; createdAt: string; demo?: boolean };
+export type DashboardData = { user: User; transactions: Transaction[]; artworks: Artwork[]; users: User[]; stats: { totalUsers: number; totalArtists: number; sold: number; revenue: number; byCategory: { _id: string; count: number }[]; sales: { _id: string; revenue: number }[] } | null };
+export const categories = ['Painting', 'Digital', 'Sculpture', 'Photography', 'Printmaking'];
+export const money = (value: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: Number.isInteger(value) ? 0 : 2 }).format(value);
+export const date = (value: string) => new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
