@@ -136,7 +136,7 @@ app.delete('/api/comments/:id', authenticated, async (req, res) => {
   const db = await database(); const result = await db.collection('comments').deleteOne({ _id: oid(req.params.id), userId: req.user._id });
   if (!result.deletedCount) return res.status(403).json({ message: 'You can only delete your own comments.' }); res.json({ ok: true });
 });
-app.get('/api/wishlist', authenticated, async (req, res) => { const db = await database(); res.json(await db.collection('artworks').find({ _id: { $in: req.user.wishlist || [] } }).toArray()); });
+app.get('/api/wishlist', authenticated, async (req, res) => { const db = await database(); res.json(await db.collection('artworks').find({ _id: { $in: req.user.wishlist || [] } }, { projection: { reservation: 0, buyerId: 0 } }).toArray()); });
 app.post('/api/wishlist/:id', authenticated, async (req, res) => {
   const db = await database(); const id = oid(req.params.id);
   if (!await db.collection('artworks').findOne({ _id: id })) return res.status(404).json({ message: 'Artwork not found.' });

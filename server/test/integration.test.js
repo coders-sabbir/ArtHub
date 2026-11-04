@@ -84,9 +84,9 @@ test('comments require a purchase, and edit/delete require comment ownership', a
   assert.equal((await request(commentPath, { method: 'DELETE', cookie: accounts.buyer.cookie })).status, 200);
 });
 test('wishlist persists on the server and does not duplicate saved artworks', async () => {
-  const piece = await art(accounts.artist.user); const path = `/api/wishlist/${piece._id}`;
+  const piece = await art(accounts.artist.user, { buyerId: accounts.outsider.user._id, reservation: new ObjectId() }); const path = `/api/wishlist/${piece._id}`;
   await request(path, { method: 'POST', cookie: accounts.buyer.cookie }); await request(path, { method: 'POST', cookie: accounts.buyer.cookie });
-  const list = await request('/api/wishlist', { cookie: accounts.buyer.cookie }); assert.equal(list.data.filter(a => a._id === String(piece._id)).length, 1);
+  const list = await request('/api/wishlist', { cookie: accounts.buyer.cookie }); assert.equal(list.data.filter(a => a._id === String(piece._id)).length, 1); assert.equal(list.data[0].buyerId, undefined); assert.equal(list.data[0].reservation, undefined);
   await request(path, { method: 'DELETE', cookie: accounts.buyer.cookie }); assert.equal((await request('/api/wishlist', { cookie: accounts.buyer.cookie })).data.length, 0);
 });
 test('checkout is unavailable without payment credentials, and invalid webhook signatures are rejected', async () => {
