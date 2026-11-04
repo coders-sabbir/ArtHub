@@ -83,9 +83,11 @@ export async function fulfillCheckout(checkoutId, stripe = stripeClient()) {
   const checkout = await stripe.checkout.sessions.retrieve(checkoutId);
   if (checkout.payment_status !== 'paid') return { status: 'pending' };
   if (!checkout.metadata?.orderId) return { status: 'ignored' };
-  const db = await database(); const session = client.startSession();
+  const db = await database(); const session = client.startSession(); let receipt;
   try {
     await session.withTransaction(async () => {
+      // MongoDB may retry the callback. Only log a receipt for this committed fulfillment.
+      receipt = null;
       const order = await db.collection('orders').findOne({ _id: oid(checkout.metadata.orderId) }, { session });
       if (!order || order.status === 'completed') return;
       if (order.status !== 'pending') failure('This order requires payment support review.');
@@ -95,10 +97,12 @@ export async function fulfillCheckout(checkoutId, stripe = stripeClient()) {
       if (order.type === 'purchase') {
         const result = await db.collection('artworks').updateOne({ _id: order.artworkId, reservation: order._id, sold: false }, { $set: { sold: true, soldAt: new Date(), buyerId: order.userId }, $unset: { reservation: '', reservedUntil: '' } }, { session });
         if (!result.modifiedCount) failure('Artwork reservation could not be fulfilled. Contact support.');
-        await db.collection('users').updateOne({ _id: order.userId }, { $inc: { purchaseCount: 1, reservedPurchases: -1 } }, { session });
+        await db.collection('users').updateOne({ _id: order.userId }, { $inc: { purchaseCount: 1, reservedPurchases: -1 }, $pull: { cart: order.artworkId } }, { session });
       } else await db.collection('users').updateOne({ _id: order.userId }, { $set: { subscriptionTier: order.tier, stripeSubscriptionId: checkout.subscription, stripeCustomerId: checkout.customer } }, { session });
       await db.collection('orders').updateOne({ _id: order._id }, { $set: { status: 'completed', completedAt: new Date(), stripeSessionId: checkout.id } }, { session });
+      receipt = { to: buyer.email, subject: order.type === 'purchase' ? 'Your ArtHub artwork purchase' : 'Your ArtHub membership', title: order.title, amount: order.amount, transactionId: checkout.id };
     });
+    if (receipt) console.info('[ArtHub simulated email — no email sent]', JSON.stringify(receipt));
     return { status: 'completed' };
   } finally { await session.endSession(); }
 }

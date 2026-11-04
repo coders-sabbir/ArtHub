@@ -1,8 +1,8 @@
 # ArtHub server
 
-Express 5 / MongoDB API for ArtHub. Provides seven-day JWT cookie sessions, email/password and optional Google OAuth, role-based permissions, artist artwork CRUD, purchased-only comments, durable wishlists, dashboards, image uploads, subscription limits and verified Stripe fulfillment.
+Express 5 / MongoDB API for ArtHub. Provides seven-day JWT cookie sessions, email/password and optional Google OAuth, role-based permissions, artist artwork CRUD, purchased-only comments, durable wishlists and buyer carts, dashboards, image uploads, subscription limits and verified Stripe fulfillment.
 
-Live API URL: pending Vercel deployment. Client repository: pending remote setup.
+Live API URL: deployment awaits the remote MongoDB connection. [Client source](https://github.com/coders-sabbir/ArtHub/tree/main/client).
 
 ```sh
 npm install
@@ -26,3 +26,7 @@ Demo seeding creates `admin@arthub.com` / `Admin@123`, artist and buyer accounts
 API tests create unique temporary fixtures and clean them up. Stripe transaction tests use an injected test client; actual provider integration verification requires credentials. Checkout reserves artwork for 31 minutes; expired orders are reconciled against Stripe before being released. Purchase allowances include completed purchases and active reservations. Free allows 3 total artworks, Pro ($9.99/month) allows 9, and Premium ($19.99/month) is unlimited. Buyer-owned purchase snapshots survive artwork deletion.
 
 Packages: Express, MongoDB driver, bcryptjs, jsonwebtoken, cookie-parser, cors, helmet, express-rate-limit, dotenv, Zod, Stripe, Better Auth, @better-auth/mongo-adapter. See the workspace README for full deployment steps.
+
+Cart endpoints: authenticated buyers use `GET /api/cart`, `POST /api/cart/:id`, and `DELETE /api/cart/:id`. Demo, sold, and self-owned artworks cannot be added. Checkout remains per artwork and rechecks availability and purchase limits. Fulfillment removes the purchased item from the buyer’s cart and logs one clearly labeled simulated email receipt for a purchase or subscription. Deleted artworks are removed from cart/wishlist arrays.
+
+Public catalog queries exclude sold pieces by default. Use `available=false` to explicitly include sold pieces; artwork details and buyer collection history remain accessible.

@@ -2,7 +2,8 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import bcrypt from 'bcryptjs';
 import { ObjectId } from 'mongodb';
-import app from '../src/app.js';
+import { createServer } from 'node:http';
+import handler from '../api/index.js';
 import { database, client } from '../src/db.js';
 import { createCheckout, fulfillCheckout, releaseOrder } from '../src/payments.js';
 import { registration, artwork, limitFor } from '../src/validation.js';
@@ -31,7 +32,7 @@ async function art(artist, extra = {}) {
   await db.collection('artworks').insertOne(doc); return doc;
 }
 before(async () => {
-  db = await database(); server = await new Promise(resolve => { const s = app.listen(0, '127.0.0.1', () => resolve(s)); }); base = `http://127.0.0.1:${server.address().port}`;
+  db = await database(); server = await new Promise(resolve => { const s = createServer(handler).listen(0, '127.0.0.1', () => resolve(s)); }); base = `http://127.0.0.1:${server.address().port}`;
   for (const [name, role] of [['buyer','user'], ['artist','artist'], ['outsider','artist'], ['admin','admin'], ['payment','user']]) accounts[name] = await account(role, name);
 });
 after(async () => {
@@ -89,6 +90,30 @@ test('wishlist persists on the server and does not duplicate saved artworks', as
   const list = await request('/api/wishlist', { cookie: accounts.buyer.cookie }); assert.equal(list.data.filter(a => a._id === String(piece._id)).length, 1); assert.equal(list.data[0].buyerId, undefined); assert.equal(list.data[0].reservation, undefined);
   await request(path, { method: 'DELETE', cookie: accounts.buyer.cookie }); assert.equal((await request('/api/wishlist', { cookie: accounts.buyer.cookie })).data.length, 0);
 });
+test('cart persists per buyer, deduplicates entries, and rejects unavailable or unauthorized additions', async () => {
+  const piece = await art(accounts.artist.user, { buyerId: accounts.outsider.user._id, reservation: new ObjectId() });
+  const path = `/api/cart/${piece._id}`;
+  assert.equal((await request(path, { method: 'POST' })).status, 401);
+  assert.equal((await request(path, { method: 'POST', cookie: accounts.artist.cookie })).status, 403);
+  for (let i = 0; i < 2; i++) assert.equal((await request(path, { method: 'POST', cookie: accounts.buyer.cookie })).status, 200);
+  const cart = await request('/api/cart', { cookie: accounts.buyer.cookie });
+  assert.equal(cart.data.length, 1); assert.equal(cart.data[0]._id, String(piece._id));
+  assert.equal(cart.data[0].buyerId, undefined); assert.equal(cart.data[0].reservation, undefined);
+  assert.equal((await request('/api/cart', { cookie: accounts.payment.cookie })).data.length, 0);
+  assert.deepEqual((await request('/api/auth/me', { cookie: accounts.buyer.cookie })).data.cart, [String(piece._id)]);
+  for (const extra of [{ sold: true }, { demo: true }, { artistId: accounts.buyer.user._id }]) {
+    const unavailable = await art(accounts.artist.user, extra);
+    assert.equal((await request(`/api/cart/${unavailable._id}`, { method: 'POST', cookie: accounts.buyer.cookie })).status, 409);
+  }
+  assert.equal((await request(path, { method: 'DELETE', cookie: accounts.buyer.cookie })).status, 200);
+  assert.equal((await request('/api/cart', { cookie: accounts.buyer.cookie })).data.length, 0);
+  await db.collection('artworks').updateOne({ _id: piece._id }, { $unset: { reservation: '' } });
+  await request(path, { method: 'POST', cookie: accounts.buyer.cookie });
+  await request(`/api/wishlist/${piece._id}`, { method: 'POST', cookie: accounts.buyer.cookie });
+  assert.equal((await request(`/api/artworks/${piece._id}`, { method: 'DELETE', cookie: accounts.artist.cookie })).status, 200);
+  const buyer = (await request('/api/auth/me', { cookie: accounts.buyer.cookie })).data;
+  assert.ok(!buyer.cart.includes(String(piece._id))); assert.ok(!buyer.wishlist.includes(String(piece._id)));
+});
 test('checkout is unavailable without payment credentials, and invalid webhook signatures are rejected', async () => {
   const previousKey = process.env.STRIPE_SECRET_KEY; const previousHook = process.env.STRIPE_WEBHOOK_SECRET;
   try {
@@ -114,14 +139,37 @@ test('purchase limits include concurrent reservations and failed Stripe sessions
   const current = await db.collection('users').findOne({ _id: accounts.payment.user._id }); assert.equal(current.reservedPurchases, 0);
   assert.equal((await db.collection('artworks').findOne({ _id: pieces[0]._id })).reservation, undefined);
 });
-test('verified payment fulfillment is idempotent and demo listings cannot be purchased', async () => {
+test('verified payment fulfillment unpublishes the artwork, clears its cart entry and logs one simulated receipt', async (t) => {
+  const receipts = t.mock.method(console, 'info', () => {});
   const piece = await art(accounts.artist.user); await createCheckout(accounts.payment.user, { type: 'purchase', artworkId: String(piece._id) }, stripe);
+  await request(`/api/cart/${piece._id}`, { method: 'POST', cookie: accounts.payment.cookie });
   const order = await db.collection('orders').findOne({ artworkId: piece._id }); const record = sessions.get(order.stripeSessionId); record.payment_status = 'paid'; record.status = 'complete';
   await Promise.all([fulfillCheckout(record.id, stripe), fulfillCheckout(record.id, stripe)]);
   assert.equal(await db.collection('transactions').countDocuments({ externalId: record.id }), 1);
   assert.equal((await db.collection('artworks').findOne({ _id: piece._id })).sold, true);
   const current = await db.collection('users').findOne({ _id: accounts.payment.user._id }); assert.equal(current.purchaseCount, 1); assert.equal(current.reservedPurchases, 0);
+  assert.equal(current.cart.length, 0);
+  assert.equal(receipts.mock.callCount(), 1);
+  const receipt = JSON.parse(receipts.mock.calls[0].arguments[1]);
+  assert.equal(receipt.to, current.email); assert.equal(receipt.transactionId, record.id);
+  const catalog = await request(`/api/artworks?search=${tag}&limit=24`);
+  assert.ok(!catalog.data.items.some(item => item._id === String(piece._id)));
+  const includingSold = await request(`/api/artworks?search=${tag}&available=false&limit=24`);
+  assert.ok(includingSold.data.items.some(item => item._id === String(piece._id)));
+  assert.equal((await request(`/api/artworks/${piece._id}`)).status, 200);
+  await assert.rejects(createCheckout(accounts.payment.user, { type: 'purchase', artworkId: String(piece._id) }, stripe), /sold/);
   const demo = await art(accounts.artist.user, { demo: true }); await assert.rejects(createCheckout(accounts.payment.user, { type: 'purchase', artworkId: String(demo._id) }, stripe), /not for sale/);
+});
+test('subscription fulfillment updates the tier and logs a simulated receipt once', async (t) => {
+  const receipts = t.mock.method(console, 'info', () => {});
+  await createCheckout(accounts.payment.user, { type: 'subscription', tier: 'pro' }, stripe);
+  const order = await db.collection('orders').findOne({ userId: accounts.payment.user._id, type: 'subscription' });
+  const checkout = sessions.get(order.stripeSessionId); checkout.payment_status = 'paid'; checkout.status = 'complete';
+  await fulfillCheckout(checkout.id, stripe); await fulfillCheckout(checkout.id, stripe);
+  assert.equal((await db.collection('users').findOne({ _id: accounts.payment.user._id })).subscriptionTier, 'pro');
+  assert.equal(await db.collection('transactions').countDocuments({ externalId: checkout.id }), 1);
+  assert.equal(receipts.mock.callCount(), 1);
+  assert.equal(JSON.parse(receipts.mock.calls[0].arguments[1]).subject, 'Your ArtHub membership');
 });
 test('password changes revoke previous sessions and admin roles are assigned server-side', async () => {
   const changed = await request('/api/profile/password', { method: 'PATCH', cookie: accounts.buyer.cookie, data: { currentPassword: 'Testing@123', password: 'Changed@123', confirmPassword: 'Changed@123' } }); assert.equal(changed.status, 200);

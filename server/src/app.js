@@ -82,7 +82,8 @@ app.get('/api/artworks', async (req, res) => {
   if (query.search) filter.$or = ['title', 'artistName'].map(field => ({ [field]: { $regex: escapeRegex(query.search), $options: 'i' } }));
   if (query.category) filter.category = query.category;
   if (query.artist) filter.artistId = oid(query.artist);
-  if (query.available === 'true') filter.sold = false;
+  // Sold originals leave the public catalog; collectors can explicitly include them.
+  if (query.available !== 'false') filter.sold = false;
   if (query.min !== undefined || query.max !== undefined) filter.price = { ...(query.min !== undefined ? { $gte: query.min } : {}), ...(query.max !== undefined ? { $lte: query.max } : {}) };
   const db = await database(); const sort = query.sort === 'newest' ? { createdAt: -1, _id: -1 } : { price: query.sort === 'price-asc' ? 1 : -1, _id: 1 };
   const [items, total] = await Promise.all([db.collection('artworks').find(filter, { projection: { reservation: 0, buyerId: 0 } }).sort(sort).skip((query.page - 1) * query.limit).limit(query.limit).toArray(), db.collection('artworks').countDocuments(filter)]);
@@ -117,7 +118,9 @@ app.delete('/api/artworks/:id', authenticated, roles('artist', 'admin'), async (
   const db = await database(); const filter = { _id: oid(req.params.id), reservation: { $exists: false }, ...(req.user.role !== 'admin' ? { artistId: req.user._id, sold: false } : {}) };
   const result = await db.collection('artworks').deleteOne(filter);
   if (!result.deletedCount) return res.status(403).json({ message: 'Artwork cannot be deleted. Check ownership and reservation status.' });
-  await db.collection('comments').deleteMany({ artworkId: filter._id }); res.json({ ok: true });
+  await db.collection('comments').deleteMany({ artworkId: filter._id });
+  await db.collection('users').updateMany({ $or: [{ wishlist: filter._id }, { cart: filter._id }] }, { $pull: { wishlist: filter._id, cart: filter._id } });
+  res.json({ ok: true });
 });
 app.post('/api/artworks/:id/comments', authenticated, roles('user'), async (req, res) => {
   const input = comment.parse(req.body); const db = await database(); const artworkId = oid(req.params.id);
@@ -143,6 +146,23 @@ app.post('/api/wishlist/:id', authenticated, async (req, res) => {
   await db.collection('users').updateOne({ _id: req.user._id }, { $addToSet: { wishlist: id } }); res.json({ ok: true });
 });
 app.delete('/api/wishlist/:id', authenticated, async (req, res) => { const db = await database(); await db.collection('users').updateOne({ _id: req.user._id }, { $pull: { wishlist: oid(req.params.id) } }); res.json({ ok: true }); });
+app.get('/api/cart', authenticated, roles('user'), async (req, res) => {
+  const db = await database();
+  res.json(await db.collection('artworks').find({ _id: { $in: req.user.cart || [] } }, { projection: { reservation: 0, buyerId: 0 } }).toArray());
+});
+app.post('/api/cart/:id', authenticated, roles('user'), async (req, res) => {
+  const db = await database(); const id = oid(req.params.id);
+  const art = await db.collection('artworks').findOne({ _id: id });
+  if (!art) return res.status(404).json({ message: 'Artwork not found.' });
+  if (art.demo || art.sold || art.artistId.equals(req.user._id)) return res.status(409).json({ message: 'Only available original artworks from other artists can be added to your cart.' });
+  await db.collection('users').updateOne({ _id: req.user._id }, { $addToSet: { cart: id } });
+  res.json({ ok: true });
+});
+app.delete('/api/cart/:id', authenticated, roles('user'), async (req, res) => {
+  const db = await database();
+  await db.collection('users').updateOne({ _id: req.user._id }, { $pull: { cart: oid(req.params.id) } });
+  res.json({ ok: true });
+});
 app.get('/api/dashboard', authenticated, async (req, res) => {
   const db = await database(); const user = req.user;
   const txFilter = user.role === 'admin' ? {} : user.role === 'artist' ? { artistId: user._id, type: 'purchase' } : { userId: user._id };
