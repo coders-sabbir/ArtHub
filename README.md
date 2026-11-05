@@ -2,11 +2,18 @@
 
 ArtHub connects independent artists with collectors through a responsive gallery, artist studios, buyer collections, and an admin dashboard. Built from the requirements in `A10_CAT-003.docx` using a Next.js frontend and a separate Express/MongoDB backend.
 
-**Local app:** http://localhost:3000  
-**API:** http://127.0.0.1:4000/api/health  
-**Live URL:** production promotion pending the remote MongoDB connection. Frontend deployment candidate: https://arthub-muh6yhvar-sabbirm2010-7086s-projects.vercel.app (API/data flows are not live yet).  
-**GitHub repository:** https://github.com/coders-sabbir/ArtHub  
-**Client source:** https://github.com/coders-sabbir/ArtHub/tree/main/client  
+**Local app:** http://localhost:3000
+
+**Local API:** http://127.0.0.1:4000/api/health
+
+**Live URL:** https://arthub-web-orpin.vercel.app
+
+**Live API health:** https://server-seven-sand-74.vercel.app/api/health
+
+**GitHub repository:** https://github.com/coders-sabbir/ArtHub
+
+**Client source:** https://github.com/coders-sabbir/ArtHub/tree/main/client
+
 **Server source:** https://github.com/coders-sabbir/ArtHub/tree/main/server
 
 ## Run locally
@@ -107,7 +114,7 @@ Verified on 5 November 2026: all 13 API integration tests, all 7 browser flow te
 5. Configure Google callback URLs, Stripe webhooks, billing portal, and imgBB. Verify login survives a direct private-route reload, create/edit an artist listing, then complete a Stripe test purchase and subscription.
 6. Replace the pending live/repository URLs above with actual deployed URLs.
 
-Vercel access has been verified and the arthub-web / arthub-api projects were created. The frontend built and deployed successfully without promoting the canonical domain. Backend deployment, canonical promotion and live session/API verification await a remote MongoDB connection; local MongoDB cannot be reached from Vercel. The client, server and root workspace files are published together in the requested ArtHub repository. Separate component Git repositories remain available locally. Live-provider verification remains pending.
+The frontend is deployed in the arthub-web Vercel project and the backend in the user-selected server project. The production frontend API_URL points to https://server-seven-sand-74.vercel.app. Database connectivity, public catalog rendering, CORS, admin login, secure session cookies and private-route reloads were verified on the live origins. The labeled demo catalog and accounts were seeded without overwriting existing records. Google/Stripe/imgBB provider flows still need their service credentials. The client, server and root workspace files are published together in the requested ArtHub repository. Separate component Git repositories remain available locally. Live-provider verification remains pending.
 
 ## Project structure and packages
 
@@ -126,7 +133,7 @@ Integration references: [Next.js routing and setup](https://nextjs.org/docs/app/
 
 See `DEPLOYMENT.md` for the current hosting state. The Vercel API entry initializes database indexes before serving requests, including on cold starts. `.vercelignore` excludes environment files, local database data, Git metadata and build caches.
 
-After a remote database is supplied, production environment values are sent through stdin without printing secrets:
+To update the production environment, values are sent through stdin without printing secrets:
 
 ```sh
 node scripts/configure-vercel.mjs
@@ -137,7 +144,9 @@ The local `.vercel/arthub-projects.json` records the two selected project IDs an
 To check deployed origins, set `ARTHUB_VERIFY_EMAIL` and `ARTHUB_VERIFY_PASSWORD` in the process environment, then run:
 
 ```sh
-node scripts/verify-live.mjs https://arthub-web-orpin.vercel.app https://arthub-api.vercel.app
+node scripts/verify-live.mjs https://arthub-web-orpin.vercel.app https://server-seven-sand-74.vercel.app
 ```
 
-This verifies database/API health, frontend proxying, CORS, direct public-route loads/reloads, custom 404, cookie security, role dashboard reloads, responsive layout and logout. Set `ARTHUB_VERIFICATION_REPORT` to a local path to save results without credentials. The script passed against the local production build; the full live check is pending database setup.
+This verifies database/API health, frontend proxying, CORS, direct public-route loads/reloads, custom 404, cookie security, role dashboard reloads, responsive layout and logout. Set `ARTHUB_VERIFICATION_REPORT` to a local path to save results without credentials. The script passed against both the local production build and the live production origins. Use --private-only when checking additional roles to skip repeated public-route checks.
+
+When the remote MONGODB_URI is already stored as a sensitive Vercel variable, preserve it with `node scripts/configure-vercel.mjs --preserve-database`. An explicit `--seed-demo` also configures the labeled demonstration catalog/accounts for the backend Vercel build. The backend `vercel-build` hook seeds only when SEED_DEMO_DATA=true and explicit seed passwords are present; it does not reset existing accounts or artworks. A unique sparse seedKey index prevents duplicate demo listings.

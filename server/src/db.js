@@ -18,6 +18,7 @@ export async function indexes() {
   await Promise.all([
     db.collection('users').createIndex({ email: 1 }, { unique: true }),
     db.collection('artworks').createIndex({ artistId: 1, createdAt: -1 }),
+    db.collection('artworks').createIndex({ seedKey: 1 }, { unique: true, sparse: true }),
     db.collection('artworks').createIndex({ category: 1, price: 1 }),
     db.collection('transactions').createIndex({ externalId: 1 }, { unique: true }),
     db.collection('transactions').createIndex({ userId: 1, artworkId: 1 }),

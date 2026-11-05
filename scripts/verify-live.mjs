@@ -3,6 +3,7 @@ import fs from 'node:fs/promises';
 import { chromium } from '@playwright/test';
 
 const [frontendInput, backendInput] = process.argv.slice(2);
+const privateOnly = process.argv.includes('--private-only');
 if (!frontendInput || !backendInput) throw new Error('Usage: node scripts/verify-live.mjs <frontend-origin> <backend-origin>. Set ARTHUB_VERIFY_EMAIL and ARTHUB_VERIFY_PASSWORD for session checks.');
 const frontend = new URL(frontendInput).origin;
 const backend = new URL(backendInput).origin;
@@ -24,27 +25,38 @@ await json(backend, '/api/health', { headers: { Origin: frontend } }).then(({ re
 });
 await json(frontend, '/api/health').then(({ data }) => { assert.equal(data.status, 'ok'); passed('frontend API proxy reaches the backend'); });
 const { data: catalog } = await json(frontend, '/api/artworks?limit=6');
-assert.ok(Array.isArray(catalog.items)); passed('public catalog API');
+assert.ok(Array.isArray(catalog.items) && catalog.items.length > 0, 'Public catalog has no artworks'); passed('public catalog API returns artwork data');
 const browser = await chromium.launch({ ...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH } : {}) });
 const context = await browser.newContext();
 const page = await context.newPage();
 const errors = [];
 page.on('pageerror', error => errors.push(error.message));
 try {
-  const publicRoutes = ['/', '/browse', '/artists', '/membership', '/about', '/contact', '/privacy', '/login', '/register'];
-  if (catalog.items[0]) publicRoutes.push(`/artworks/${catalog.items[0]._id}`);
-  for (const route of publicRoutes) {
-    for (const reload of [false, true]) {
-      const response = reload ? await page.reload() : await page.goto(`${frontend}${route}`);
-      assert.equal(response.status(), 200, `${route} ${reload ? 'reload' : 'direct load'} failed`);
-      await page.locator('h1').first().waitFor();
+  if (!privateOnly) {
+    const publicRoutes = ['/', '/browse', '/artists', '/membership', '/about', '/contact', '/privacy', '/login', '/register'];
+    if (catalog.items[0]) publicRoutes.push(`/artworks/${catalog.items[0]._id}`);
+    for (const route of publicRoutes) {
+      for (const reload of [false, true]) {
+        const response = reload ? await page.reload() : await page.goto(`${frontend}${route}`);
+        assert.equal(response.status(), 200, `${route} ${reload ? 'reload' : 'direct load'} failed`);
+        await page.locator('h1').first().waitFor();
+      }
     }
+    passed('public routes load directly and survive reload');
+    const missing = await page.goto(`${frontend}/arthub-live-check-missing-page`);
+    assert.equal(missing.status(), 404);
+    await page.getByRole('heading', { name: 'Page Not Found', exact: true }).waitFor();
+    passed('unknown routes return the custom 404 page');
+    await page.goto(`${frontend}/`);
+    await page.locator('.art-card').first().waitFor();
+    assert.equal(await page.locator('.art-card').count(), Math.min(6, catalog.total));
+    await page.locator('.artist-card').first().waitFor();
+    assert.equal(await page.locator('.artist-card').count(), 3);
+    await page.goto(`${frontend}/browse`);
+    await page.locator('.art-card').first().waitFor();
+    assert.equal(await page.locator('.art-card').count(), Math.min(12, catalog.total));
+    passed('homepage featured artworks, top artists and browse data render');
   }
-  passed('public routes load directly and survive reload');
-  const missing = await page.goto(`${frontend}/arthub-live-check-missing-page`);
-  assert.equal(missing.status(), 404);
-  await page.getByRole('heading', { name: 'Page Not Found', exact: true }).waitFor();
-  passed('unknown routes return the custom 404 page');
   await page.goto(`${frontend}/login`);
   await page.locator('.auth-form-wrap').getByLabel('Email address', { exact: true }).fill(email);
   await page.getByLabel('Password', { exact: true }).fill(password);

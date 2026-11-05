@@ -3,7 +3,7 @@
 Source: user-supplied A10_CAT-003 requirement text.
 Updated: 5 November 2026, Asia/Shanghai.
 
-**Status: the identified code gaps are fixed. The Vercel frontend deployment candidate is ready; backend deployment and full live verification await MongoDB Atlas.** The user requested code fixes now and will provide credentials later. No service secrets, payment success, genuine artist ownership, live URLs, or repository links have been fabricated.
+**Status: the identified code gaps are fixed and the core marketplace is deployed with a seeded remote database. Live catalog, CORS, login and private-route reloads have been verified.** The user requested code fixes now and will provide credentials later. No service secrets, payment success, genuine artist ownership, live URLs, or repository links have been fabricated.
 
 ## Verification
 
@@ -12,7 +12,7 @@ Updated: 5 November 2026, Asia/Shanghai.
 - `npm run test:e2e`: all 7 Chromium browser tests passed against the production frontend build and local API/database.
 - Browser coverage includes 320/390/768/1440px public layouts, reload-safe buyer sessions, purchased-only comment CRUD, artist create/edit/delete, admin analytics/tables, role-based Dashboard dropdowns on desktop/mobile with Escape support, delayed dashboard table skeletons, fetch-error toast/retry, and wishlist-to-cart persistence with checkout loading/error recovery.
 - Payment tests use a Stripe test double. They cover concurrent reservations, quotas, idempotent fulfillment, cart removal, sold catalog visibility, subscription tier updates, and one simulated receipt per successful fulfillment.
-- Standalone client/server commit counts are 24/15 after committing the fixes; the required minimum counts are met. The requested GitHub repository combines both components with the root workspace files.
+- The original standalone client/server histories meet the required minimum commit counts. The requested GitHub repository combines both components with the root workspace files; subsequent fixes are committed as they are completed.
 
 ## Gaps fixed
 
@@ -48,10 +48,10 @@ Updated: 5 November 2026, Asia/Shanghai.
 | Stripe artwork purchases/subscriptions | Set STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET; configure webhooks/billing portal and verify actual Stripe test-mode payment, tier/history/sold updates |
 | imgBB uploads | Set IMGBB_API_KEY; verify original artwork and avatar file uploads |
 | Genuine original listings | Publish artwork supplied by its actual artist. Museum demo reproductions intentionally remain unavailable for purchase. Browser tests create and clean up temporary original-listing fixtures; these do not establish ownership of the fixture image |
-| Deployment | Vercel login verified; arthub-web and arthub-api created with explicit public-access approval. Frontend production candidate deployed successfully, canonical domain not promoted. Remote MongoDB is still required for backend deployment and full live CORS/API/session checks. See DEPLOYMENT.md |
-| Submission links | The user selected one GitHub repository, https://github.com/coders-sabbir/ArtHub, containing client/ and server/ source links. Two separate remote repositories have not been created. The final live URL remains pending database/deployment completion |
+| Deployment | Live frontend: arthub-web-orpin.vercel.app. User-selected live backend: server-seven-sand-74.vercel.app. Remote database connectivity, API proxy/CORS, data rendering, login and private-route reloads verified. See DEPLOYMENT.md |
+| Submission links | The user selected one GitHub repository, https://github.com/coders-sabbir/ArtHub, containing client/ and server/ source links. Two separate remote repositories have not been created. The live frontend URL is https://arthub-web-orpin.vercel.app |
 
-JWT, Better Auth and MongoDB configuration are present locally. Google credentials, Stripe credentials and imgBB key were empty when checked; secret values were not printed. No real external-provider success or production behavior is claimed.
+Production MongoDB, JWT and Better Auth signing settings are configured. The core database/API/session behavior was verified live. Google credentials, Stripe credentials and imgBB key remain pending; no real OAuth, upload or payment-provider success is claimed. Secret values were not printed.
 
 ## Assignment ambiguities
 
@@ -60,10 +60,11 @@ JWT, Better Auth and MongoDB configuration are present locally. Google credentia
 - Charts are explicitly required in the admin dashboard. Buyer/artist dashboards have statistic cards; separate charts for those roles are not explicitly defined.
 - The linked explanation video was not supplied/reviewed; this audit covers the supplied requirement text, source and local verification.
 
-## Hosting preparation verification
+## Live hosting verification
 
-- Vercel remote frontend build and deployment passed: `dpl_2iEn8E3XhBVKNDgXXSBQbXpK3mJP`.
-- Serverless API initialization now creates the required indexes before requests. All 13 backend tests pass through this actual serverless handler.
-- Upload dry-run verified that `.env`, Git metadata and local database files were excluded.
-- The new deployment smoke script passed against the local production frontend/API, including private-route reloads and login/logout. These are local results, not a claim of live database or session verification.
-- MongoDB Atlas was still unconnected when last checked; no remote database URI is currently configured. No local database was exposed to the internet.
+- Frontend remote build/deployment passed and the canonical domain is promoted.
+- The user-selected server project has its MongoDB setting preserved and its missing JWT/origin settings configured; backend build/deployment passed.
+- The production demo seed populated the previously empty catalog with labeled records while preserving existing data.
+- The live smoke script verified database health, frontend proxy, CORS, public direct loads/reloads, custom 404, six featured artworks, three artists, browse data, admin login/cookie attributes, private reloads, responsive layout and logout, without browser runtime errors.
+- All 13 local backend tests and TypeScript checks pass after the sparse unique seedKey index change.
+- Deployment uploads exclude environment files, Git metadata and local database files. Sensitive remote MongoDB credentials were never exported.

@@ -7,6 +7,7 @@ const projects = JSON.parse(await fs.readFile(new URL('../.vercel/arthub-project
 const settings = dotenv.parse(await fs.readFile(new URL('../server/.env', import.meta.url)));
 const frontendOnly = process.argv.includes('--frontend-only');
 const backendOnly = process.argv.includes('--backend-only');
+const preserveDatabase = process.argv.includes('--preserve-database');
 if (frontendOnly && backendOnly) throw new Error('Choose one project, or omit the flags to configure both.');
 async function api(endpoint, method = 'GET', input) {
   return new Promise((resolve, reject) => {
@@ -26,6 +27,10 @@ async function api(endpoint, method = 'GET', input) {
 async function configure(project, entries) {
   const existing = await api(`/v9/projects/${project.id}/env`);
   const productionKeys = new Set(existing.envs.filter(env => env.target?.includes('production')).map(env => env.key));
+  for (const [key, value, , preserve] of entries) {
+    if (preserve && productionKeys.has(key)) continue;
+    if (!value) throw new Error(`${project.name}: ${key} is missing; no environment values were changed.`);
+  }
   for (const [key, value, secret, preserve] of entries) {
     if (preserve && productionKeys.has(key)) { console.log(`${project.name}: ${key} already configured`); continue; }
     await api(`/v10/projects/${project.id}/env?upsert=true`, 'POST', { key, value, type: secret ? 'sensitive' : 'plain', target: ['production'] });
@@ -34,14 +39,21 @@ async function configure(project, entries) {
 }
 if (!frontendOnly) {
   const uri = process.env.MONGODB_URI || settings.MONGODB_URI;
-  if (!uri || /localhost|127\.0\.0\.1|\[::1\]/i.test(uri) || !/^mongodb(\+srv)?:\/\//.test(uri)) throw new Error('A remote MongoDB URI is required. Local database settings cannot be deployed.');
+  if (!preserveDatabase && (!uri || /localhost|127\.0\.0\.1|\[::1\]/i.test(uri) || !/^mongodb(\+srv)?:\/\//.test(uri))) throw new Error('A remote MongoDB URI is required. Local database settings cannot be deployed.');
   const entries = [
     ['NODE_ENV', 'production', false],
     ['FRONTEND_URL', new URL(projects.frontend.url).origin, false],
-    ['MONGODB_URI', uri, true],
+    ['MONGODB_URI', preserveDatabase ? undefined : uri, true, preserveDatabase],
     ['JWT_SECRET', randomBytes(48).toString('base64url'), true, true],
     ['BETTER_AUTH_SECRET', randomBytes(48).toString('base64url'), true, true],
   ];
+  if (process.argv.includes('--seed-demo')) {
+    entries.push(
+      ['SEED_DEMO_DATA', 'true', false],
+      ['SEED_ADMIN_PASSWORD', process.env.SEED_ADMIN_PASSWORD || settings.SEED_ADMIN_PASSWORD || 'Admin@123', true, true],
+      ['SEED_DEMO_PASSWORD', process.env.SEED_DEMO_PASSWORD || settings.SEED_DEMO_PASSWORD || 'ArtHub@123', true, true],
+    );
+  }
   for (const key of ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET', 'IMGBB_API_KEY']) {
     const value = process.env[key] || settings[key];
     if (value) entries.push([key, value, true]);

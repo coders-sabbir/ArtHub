@@ -2,7 +2,7 @@
 
 Next.js 16 / React 19 frontend for the ArtHub marketplace. Includes the responsive gallery, searching/filtering, artwork details, role dashboards, artist forms, authentication screens, comments, wishlists, a persistent buyer cart with per-artwork checkout, subscriptions, themes, and error/loading states. Role-based Dashboard menus support keyboard and mobile navigation; dashboard tables use skeleton rows and checkout shows a global spinner.
 
-Live URL: production promotion awaits the remote MongoDB connection. [Frontend deployment candidate](https://arthub-muh6yhvar-sabbirm2010-7086s-projects.vercel.app) has no live backend yet. [Backend source](https://github.com/coders-sabbir/ArtHub/tree/main/server).
+Live URL: https://arthub-web-orpin.vercel.app. Production API proxy: https://server-seven-sand-74.vercel.app. [Backend source](https://github.com/coders-sabbir/ArtHub/tree/main/server).
 
 ```sh
 npm install

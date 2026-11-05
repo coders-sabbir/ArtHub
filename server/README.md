@@ -2,7 +2,7 @@
 
 Express 5 / MongoDB API for ArtHub. Provides seven-day JWT cookie sessions, email/password and optional Google OAuth, role-based permissions, artist artwork CRUD, purchased-only comments, durable wishlists and buyer carts, dashboards, image uploads, subscription limits and verified Stripe fulfillment.
 
-Live API URL: deployment awaits the remote MongoDB connection. [Client source](https://github.com/coders-sabbir/ArtHub/tree/main/client).
+Live API URL: https://server-seven-sand-74.vercel.app. Health check: /api/health. [Client source](https://github.com/coders-sabbir/ArtHub/tree/main/client).
 
 ```sh
 npm install
@@ -30,3 +30,5 @@ Packages: Express, MongoDB driver, bcryptjs, jsonwebtoken, cookie-parser, cors, 
 Cart endpoints: authenticated buyers use `GET /api/cart`, `POST /api/cart/:id`, and `DELETE /api/cart/:id`. Demo, sold, and self-owned artworks cannot be added. Checkout remains per artwork and rechecks availability and purchase limits. Fulfillment removes the purchased item from the buyer’s cart and logs one clearly labeled simulated email receipt for a purchase or subscription. Deleted artworks are removed from cart/wishlist arrays.
 
 Public catalog queries exclude sold pieces by default. Use `available=false` to explicitly include sold pieces; artwork details and buyer collection history remain accessible.
+
+The production server project stores MONGODB_URI, JWT_SECRET, BETTER_AUTH_SECRET and FRONTEND_URL in Vercel. Optional deployment seeding uses `vercel-build`: set SEED_DEMO_DATA=true together with explicit SEED_ADMIN_PASSWORD and SEED_DEMO_PASSWORD. Seeding runs during the build, uses the existing idempotent seed, and keeps credentials on Vercel without exposing a bootstrap endpoint. The seedKey sparse unique index prevents duplicate catalog entries.
