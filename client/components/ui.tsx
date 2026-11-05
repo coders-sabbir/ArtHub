@@ -4,6 +4,12 @@ import { X, Search, ImageOff, RotateCcw } from 'lucide-react';
 import Link from 'next/link';
 export function Loader({ label = 'Finding your next inspiration…' }: { label?: string }) { return <div className="loading-screen" role="status"><span className="spinner"/><span>{label}</span></div>; }
 export function SkeletonGrid({ count = 8 }: { count?: number }) { return <div className="art-grid" aria-label="Loading artworks" aria-busy="true">{Array.from({ length: count }, (_, i) => <div className="skeleton-card" key={i}><div className="skeleton skeleton-image"/><div className="skeleton skeleton-line"/><div className="skeleton skeleton-line short"/></div>)}</div>; }
+export function TableSkeleton({ columns = 4, rows = 5 }: { columns?: number; rows?: number }) {
+  return <div className="table-wrap table-skeleton" role="status" aria-label="Loading table" aria-busy="true"><span className="sr-only">Loading table rows…</span><table aria-hidden="true"><thead><tr>{Array.from({ length: columns }, (_, i) => <th key={i}><div className="skeleton skeleton-line"/></th>)}</tr></thead><tbody>{Array.from({ length: rows }, (_, row) => <tr key={row}>{Array.from({ length: columns }, (_, column) => <td key={column}><div className={`skeleton skeleton-line ${column ? 'short' : ''}`}/></td>)}</tr>)}</tbody></table></div>;
+}
+export function PaymentLoading({ label = 'Opening secure checkout…' }: { label?: string }) {
+  return <div className="payment-loading" aria-live="polite"><Loader label={label}/></div>;
+}
 export function Empty({ title, description, action }: { title: string; description: string; action?: React.ReactNode }) { return <div className="empty-state"><span className="empty-icon"><Search size={30}/></span><h3>{title}</h3><p>{description}</p>{action}</div>; }
 export function Failure({ message, retry }: { message: string; retry: () => void }) { return <div className="empty-state" role="alert"><ImageOff size={32}/><h3>We couldn’t load this collection</h3><p>{message}</p><button className="button button-outline" onClick={retry}><RotateCcw size={16}/>Try again</button></div>; }
 export function Modal({ title, children, close }: { title: string; children: React.ReactNode; close: () => void }) {
