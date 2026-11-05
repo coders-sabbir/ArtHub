@@ -8,10 +8,11 @@ Updated: 5 November 2026, Asia/Shanghai.
 ## Verification
 
 - `npm run build`: passed with the default Next.js/Turbopack build. Workspace package resolution is configured; no webpack fallback is needed.
-- `npm test`: all 13 backend integration tests and frontend TypeScript checking passed.
+- `npm test`: all 16 backend integration tests and frontend TypeScript checking passed, including configured publishing fees, canceled/failed payments, duplicate fulfillment and unpublished artwork purchase rejection.
 - `npm run test:e2e`: all 7 Chromium browser tests passed against the production frontend build and local API/database.
 - Browser coverage includes 320/390/768/1440px public layouts, reload-safe buyer sessions, purchased-only comment CRUD, artist create/edit/delete, admin analytics/tables, role-based Dashboard dropdowns on desktop/mobile with Escape support, delayed dashboard table skeletons, fetch-error toast/retry, and wishlist-to-cart persistence with checkout loading/error recovery.
 - Payment tests use a Stripe test double. They cover concurrent reservations, quotas, idempotent fulfillment, cart removal, sold catalog visibility, subscription tier updates, and one simulated receipt per successful fulfillment.
+- `npx playwright test tests/wishlist-publishing-theme.spec.ts`: all 4 focused browser checks passed with mocked API responses, covering dark-mode persistence, sold badges and disabled purchases, publishing-fee disclosure/error recovery, and artist checkout return pages. Production build also passed after these changes; no live Stripe payment was made.
 - The original standalone client/server histories meet the required minimum commit counts. The requested GitHub repository combines both components with the root workspace files; subsequent fixes are committed as they are completed.
 
 ## Gaps fixed
@@ -26,7 +27,8 @@ Updated: 5 November 2026, Asia/Shanghai.
 | API-fetch error toasts incomplete | Home, browse, artwork details, artist pages, dashboard, wishlist and cart report fetch failures; inline retry remains available |
 | Wishlist has no Add to Cart | Available originals can be added to a database-backed buyer cart; cart supports reload persistence, removal and per-artwork Stripe checkout |
 | Sold artwork stays in the default catalog | Sold artworks are excluded by default; an explicit Include sold artworks filter exposes sold badges while details/history remain accessible; backend prevents repeat purchase |
-| Simulated purchase/payment email absent | Successful purchase or subscription fulfillment emits a clearly labeled simulated email log after commit; duplicate/concurrent fulfillment does not log another receipt |
+| Simulated purchase/payment email absent | Successful purchase, publishing-fee or subscription fulfillment emits a clearly labeled simulated email log after commit; duplicate/concurrent fulfillment does not log another receipt |
+| Publishing-fee workflow absent | Configurable `PUBLISHING_FEE_USD`, default `0`; positive fees use verified Stripe checkout before artwork publication and produce a publishing transaction and simulated receipt |
 | Buyer purchase history also mixes subscriptions | Purchase history tab now filters to artwork purchases; recent activity can still show memberships |
 | Deleted artwork leaves saved-item references | Artwork deletion also removes cart/wishlist references; purchase transaction snapshots remain intact |
 
@@ -55,7 +57,7 @@ Production MongoDB, JWT and Better Auth signing settings are configured. The cor
 
 ## Assignment ambiguities
 
-- The transaction descriptions alternately say subscription/purchase and publishing fee/purchase. No publishing-fee amount or workflow is specified; subscription/purchase remains implemented.
+- Publishing fees are configurable and default to $0, as selected by the user. Positive fees require verified Stripe payment before publication; purchase and subscription flows remain available.
 - The document specifies monthly subscription prices but does not define monthly quota resets. Purchase limits continue to use total completed purchases plus active reservations.
 - Charts are explicitly required in the admin dashboard. Buyer/artist dashboards have statistic cards; separate charts for those roles are not explicitly defined.
 - The linked explanation video was not supplied/reviewed; this audit covers the supplied requirement text, source and local verification.
