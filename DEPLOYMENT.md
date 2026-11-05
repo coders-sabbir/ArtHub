@@ -10,7 +10,7 @@ Updated 5 November 2026 (Asia/Shanghai).
 | Backend | server | https://server-seven-sand-74.vercel.app | READY; remote MongoDB connected |
 
 Vercel scope: `sabbirm2010-7086s-projects`.
-Frontend deployment: `dpl_4amxVfPMVvX8zkTGeNcaoZCqmqZq`.
+Frontend deployment: `dpl_BE9hd5wuQRKdyT1PzUYU1CRvv9DR`.
 Backend deployment: `dpl_5GzkvDdsLi7J7baT8bKwdwhBQqTo`.
 The frontend uses Node.js 24 with root `client`; the user's server project uses Node.js 26 with root `server`.
 

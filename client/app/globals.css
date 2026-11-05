@@ -42,3 +42,5 @@
 .cart-actions>.button{flex:1}
 @media(max-width:900px){.dashboard-nav-trigger{font-size:.8rem}}
 @media(max-width:650px){.dashboard-nav{display:block;height:auto}.dashboard-nav-trigger{height:auto;width:100%;padding:8px 10px;font-size:.9rem;justify-content:space-between}.dashboard-nav-trigger.active:after{display:none}.dashboard-nav-links{position:static;box-shadow:none;border:0;border-left:2px solid var(--line);margin-left:10px;min-width:0}.cart-image{height:210px}.cart-actions{gap:5px}.cart-actions>.button{font-size:.75rem;padding-inline:10px}.cart-card-action{font-size:.7rem;padding-inline:8px}}
+
+.demo-accounts h2{font-size:1rem;letter-spacing:-.02em;margin:2px 0 14px}.demo-account+.demo-account{border-top:1px solid var(--line);padding-top:14px;margin-top:14px}.demo-account-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}.demo-account-heading strong{color:var(--text);font-weight:600}.demo-account-heading .button{font-size:.7rem;min-height:32px;padding:6px 10px}.demo-account p{margin-top:6px;line-height:1.6}.demo-account code{font-size:.75rem;color:var(--text);overflow-wrap:anywhere}
