@@ -23,6 +23,15 @@
 @media(min-width:651px) and (max-width:900px){.hero-flourish{right:-6px}}
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important;animation-duration:.01ms!important;animation-iteration-count:1!important}}
 
+.buyer-section-description{font-size:.8rem;margin-bottom:18px;color:var(--muted)}
+.table-wrap+.buyer-section-description{margin-top:16px;margin-bottom:0}
+.buyer-profile-summary{display:flex;align-items:center;justify-content:space-between;gap:20px}
+.buyer-profile-summary>div{min-width:0}
+.buyer-profile-summary p{font-size:.85rem;overflow-wrap:anywhere;margin-top:5px}
+.buyer-profile-actions{display:flex;flex-wrap:wrap;gap:10px}
+#profile-details,#change-password{scroll-margin-top:110px}
+@media(max-width:650px){.buyer-profile-summary{flex-direction:column;align-items:flex-start}.buyer-profile-actions .button{font-size:.8rem}.dashboard-panel .panel-heading{flex-wrap:wrap;gap:12px}}
+
 /* Dashboard disclosure, loading feedback, and saved-artwork checkout. */
 .dashboard-nav{position:relative;height:100%;display:flex;align-items:center}
 .dashboard-nav-trigger{display:flex;align-items:center;gap:5px;font-size:.875rem;color:var(--muted);height:100%;padding:0;position:relative}
