@@ -43,4 +43,22 @@
 @media(max-width:900px){.dashboard-nav-trigger{font-size:.8rem}}
 @media(max-width:650px){.dashboard-nav{display:block;height:auto}.dashboard-nav-trigger{height:auto;width:100%;padding:8px 10px;font-size:.9rem;justify-content:space-between}.dashboard-nav-trigger.active:after{display:none}.dashboard-nav-links{position:static;box-shadow:none;border:0;border-left:2px solid var(--line);margin-left:10px;min-width:0}.cart-image{height:210px}.cart-actions{gap:5px}.cart-actions>.button{font-size:.75rem;padding-inline:10px}.cart-card-action{font-size:.7rem;padding-inline:8px}}
 
-.demo-accounts h2{font-size:1rem;letter-spacing:-.02em;margin:2px 0 14px}.demo-account+.demo-account{border-top:1px solid var(--line);padding-top:14px;margin-top:14px}.demo-account-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}.demo-account-heading strong{color:var(--text);font-weight:600}.demo-account-heading .button{font-size:.7rem;min-height:32px;padding:6px 10px}.demo-account p{margin-top:6px;line-height:1.6}.demo-account code{font-size:.75rem;color:var(--text);overflow-wrap:anywhere}
+.demo-accounts{padding:0;border:1px solid var(--line);border-radius:8px;background:var(--surface);overflow:hidden}
+.demo-accounts summary{display:flex;align-items:center;gap:12px;padding:15px 16px;list-style:none;color:var(--green)}
+.demo-accounts summary::-webkit-details-marker{display:none}
+.demo-accounts .demo-summary-copy{display:block;flex:1;margin:0;min-width:0}
+.demo-summary-copy strong{display:block;color:var(--text);font-size:.8rem;font-weight:600}
+.demo-accounts .demo-summary-copy>span{margin:3px 0 0;font-size:.7rem;color:var(--muted);font-weight:400}
+.demo-summary-chevron{flex-shrink:0;transition:transform .2s ease}
+.demo-accounts[open] .demo-summary-chevron{transform:rotate(180deg)}
+.demo-account-options{padding:0 16px 16px;border-top:1px solid var(--line)}
+.demo-account{padding-top:14px}
+.demo-account+.demo-account{border-top:1px solid var(--line);margin-top:14px}
+.demo-account-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:9px}
+.demo-account-heading strong{color:var(--text);font-size:.75rem;font-weight:600}
+.demo-account-heading .button{font-size:.7rem;min-height:32px;padding:6px 10px;border-radius:5px}
+.demo-account p{display:flex;align-items:center;gap:8px;margin-top:5px;line-height:1.7}
+.demo-account p>span{display:inline-block;min-width:54px;margin:0;font-size:.7rem}
+.demo-account code{font-size:.75rem;color:var(--text);overflow-wrap:anywhere}
+.demo-password-toggle{display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;width:28px;height:28px;border-radius:4px;color:var(--muted)}
+.demo-password-toggle:hover{background:var(--surface2);color:var(--green)}
