@@ -11,7 +11,7 @@ import { database, oid } from './db.js';
 import { config } from './config.js';
 import { authenticated, roles, setSession, cookieOptions } from './auth.js';
 import { googleAuth } from './oauth.js';
-import { artwork, comment, login, registration, profile, passwordChange, publicUser, categories } from './validation.js';
+import { artwork, checkoutInput, comment, login, registration, profile, passwordChange, publicUser, categories } from './validation.js';
 import { createCheckout, stripeClient, handleWebhook, fulfillCheckout, releaseOrder } from './payments.js';
 
 const app = express();
@@ -39,7 +39,7 @@ app.all('/api/oauth/*splat', async (req, res) => {
 app.use(express.json({ limit: '12mb' }));
 const authLimiter = rateLimit({ windowMs: 15 * 60_000, limit: 30, standardHeaders: true, legacyHeaders: false, message: { message: 'Too many sign-in attempts. Please try again in 15 minutes.' } });
 app.get('/api/health', async (req, res) => { const db = await database(); await db.command({ ping: 1 }); res.json({ status: 'ok' }); });
-app.get('/api/config', (req, res) => res.json({ demoAccounts: !config.production, google: Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET && process.env.BETTER_AUTH_SECRET), payments: Boolean(process.env.STRIPE_SECRET_KEY && process.env.STRIPE_WEBHOOK_SECRET), uploads: Boolean(process.env.IMGBB_API_KEY), categories }));
+app.get('/api/config', (req, res) => res.json({ demoAccounts: !config.production, google: Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET && process.env.BETTER_AUTH_SECRET), payments: Boolean(process.env.STRIPE_SECRET_KEY && process.env.STRIPE_WEBHOOK_SECRET), publishingFee: config.publishingFee, uploads: Boolean(process.env.IMGBB_API_KEY), categories }));
 app.post('/api/auth/register', authLimiter, async (req, res) => {
   const input = registration.parse(req.body); const db = await database();
   const user = { _id: new ObjectId(), name: input.name, email: input.email, passwordHash: await bcrypt.hash(input.password, 12), role: input.role, subscriptionTier: 'free', purchaseCount: 0, reservedPurchases: 0, tokenVersion: 0, wishlist: [], bio: '', avatar: '', createdAt: new Date() };
@@ -83,7 +83,8 @@ app.get('/api/artworks', async (req, res) => {
   if (query.category) filter.category = query.category;
   if (query.artist) filter.artistId = oid(query.artist);
   // Sold originals leave the public catalog; collectors can explicitly include them.
-  if (query.available !== 'false') filter.sold = false;
+  if (query.available !== 'false') { filter.sold = false; filter.published = { $ne: false }; }
+  else filter.$and = [{ $or: [{ published: { $ne: false } }, { sold: true }] }];
   if (query.min !== undefined || query.max !== undefined) filter.price = { ...(query.min !== undefined ? { $gte: query.min } : {}), ...(query.max !== undefined ? { $lte: query.max } : {}) };
   const db = await database(); const sort = query.sort === 'newest' ? { createdAt: -1, _id: -1 } : { price: query.sort === 'price-asc' ? 1 : -1, _id: 1 };
   const [items, total] = await Promise.all([db.collection('artworks').find(filter, { projection: { reservation: 0, buyerId: 0 } }).sort(sort).skip((query.page - 1) * query.limit).limit(query.limit).toArray(), db.collection('artworks').countDocuments(filter)]);
@@ -97,7 +98,7 @@ app.get('/api/artworks/:id', async (req, res) => {
 });
 app.get('/api/artists', async (req, res) => {
   const db = await database();
-  const artists = await db.collection('users').aggregate([{ $match: { role: 'artist' } }, { $lookup: { from: 'transactions', localField: '_id', foreignField: 'artistId', as: 'sales' } }, { $lookup: { from: 'artworks', localField: '_id', foreignField: 'artistId', as: 'works' } }, { $project: { name: 1, avatar: 1, bio: 1, sales: { $size: '$sales' }, artworks: { $size: '$works' }, image: { $arrayElemAt: ['$works.image', 0] } } }, { $sort: { sales: -1, artworks: -1, name: 1 } }, { $limit: 3 }]).toArray();
+  const artists = await db.collection('users').aggregate([{ $match: { role: 'artist' } }, { $lookup: { from: 'transactions', localField: '_id', foreignField: 'artistId', pipeline: [{ $match: { type: 'purchase' } }], as: 'sales' } }, { $lookup: { from: 'artworks', localField: '_id', foreignField: 'artistId', as: 'works' } }, { $project: { name: 1, avatar: 1, bio: 1, sales: { $size: '$sales' }, artworks: { $size: '$works' }, image: { $arrayElemAt: ['$works.image', 0] } } }, { $sort: { sales: -1, artworks: -1, name: 1 } }, { $limit: 3 }]).toArray();
   res.json(artists);
 });
 app.get('/api/artists/:id', async (req, res) => {
@@ -106,7 +107,8 @@ app.get('/api/artists/:id', async (req, res) => {
 });
 app.post('/api/artworks', authenticated, roles('artist'), async (req, res) => {
   const input = artwork.parse(req.body); const db = await database();
-  const art = { ...input, _id: new ObjectId(), artistId: req.user._id, artistName: req.user.name, sold: false, createdAt: new Date() };
+  if (config.publishingFee > 0) return res.status(201).json(await createCheckout(req.user, { type: 'publishing', artwork: input }));
+  const art = { ...input, _id: new ObjectId(), artistId: req.user._id, artistName: req.user.name, sold: false, published: true, createdAt: new Date() };
   await db.collection('artworks').insertOne(art); res.status(201).json(art);
 });
 app.patch('/api/artworks/:id', authenticated, roles('artist'), async (req, res) => {
@@ -154,7 +156,7 @@ app.post('/api/cart/:id', authenticated, roles('user'), async (req, res) => {
   const db = await database(); const id = oid(req.params.id);
   const art = await db.collection('artworks').findOne({ _id: id });
   if (!art) return res.status(404).json({ message: 'Artwork not found.' });
-  if (art.demo || art.sold || art.artistId.equals(req.user._id)) return res.status(409).json({ message: 'Only available original artworks from other artists can be added to your cart.' });
+  if (art.demo || art.sold || art.published === false || art.artistId.equals(req.user._id)) return res.status(409).json({ message: 'Only available original artworks from other artists can be added to your cart.' });
   await db.collection('users').updateOne({ _id: req.user._id }, { $addToSet: { cart: id } });
   res.json({ ok: true });
 });
@@ -198,8 +200,8 @@ app.post('/api/uploads', authenticated, async (req, res) => {
   const response = await fetch('https://api.imgbb.com/1/upload', { method: 'POST', body, signal: AbortSignal.timeout(30000) }); const result = await response.json();
   if (!response.ok || !result.success) return res.status(502).json({ message: 'Image upload failed. Please try again.' }); res.json({ url: result.data.url });
 });
-app.post('/api/checkout', authenticated, roles('user'), async (req, res) => {
-  const input = z.discriminatedUnion('type', [z.object({ type: z.literal('purchase'), artworkId: z.string() }), z.object({ type: z.literal('subscription'), tier: z.enum(['pro', 'premium']) })]).parse(req.body);
+app.post('/api/checkout', authenticated, roles('user', 'artist'), async (req, res) => {
+  const input = checkoutInput.parse(req.body);
   res.json(await createCheckout(req.user, input));
 });
 app.get('/api/checkout/status', authenticated, async (req, res) => {

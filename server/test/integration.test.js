@@ -7,6 +7,7 @@ import handler from '../api/index.js';
 import { database, client } from '../src/db.js';
 import { createCheckout, fulfillCheckout, releaseOrder } from '../src/payments.js';
 import { registration, artwork, limitFor } from '../src/validation.js';
+import { config } from '../src/config.js';
 
 const tag = `qa-${Date.now()}`;
 let db, server, base;
@@ -69,7 +70,7 @@ test('server enforces roles, foreign origins and artist ownership', async () => 
   assert.equal((await request('/api/dashboard')).status, 401);
   assert.equal((await request('/api/artworks', { method: 'POST', cookie: accounts.buyer.cookie, data: { role: 'artist' } })).status, 403);
   assert.equal((await request('/api/auth/logout', { method: 'POST', origin: 'https://evil.example', cookie: accounts.buyer.cookie, data: {} })).status, 403);
-  const created = await request('/api/artworks', { method: 'POST', cookie: accounts.artist.cookie, data: { title: `${tag} owned`, description: 'An original artwork with a meaningful description.', price: 70, category: 'Painting', image: 'https://example.com/image.jpg' } }); assert.equal(created.status, 201);
+  const created = await request('/api/artworks', { method: 'POST', cookie: accounts.artist.cookie, data: { title: `${tag} owned`, description: 'An original artwork with a meaningful description.', price: 70, category: 'Painting', image: 'https://example.com/image.jpg' } }); assert.equal(created.status, 201); assert.equal(created.data.published, true);
   assert.equal((await request(`/api/artworks/${created.data._id}`, { method: 'DELETE', cookie: accounts.outsider.cookie })).status, 403);
   const changed = await request(`/api/artworks/${created.data._id}`, { method: 'PATCH', cookie: accounts.artist.cookie, data: { ...created.data, price: 75 } }); assert.equal(changed.status, 200); assert.equal(changed.data.price, 75);
   assert.equal((await request(`/api/artworks/${created.data._id}`, { method: 'DELETE', cookie: accounts.artist.cookie })).status, 200);
@@ -147,6 +148,7 @@ test('verified payment fulfillment unpublishes the artwork, clears its cart entr
   await Promise.all([fulfillCheckout(record.id, stripe), fulfillCheckout(record.id, stripe)]);
   assert.equal(await db.collection('transactions').countDocuments({ externalId: record.id }), 1);
   assert.equal((await db.collection('artworks').findOne({ _id: piece._id })).sold, true);
+  assert.equal((await db.collection('artworks').findOne({ _id: piece._id })).published, false);
   const current = await db.collection('users').findOne({ _id: accounts.payment.user._id }); assert.equal(current.purchaseCount, 1); assert.equal(current.reservedPurchases, 0);
   assert.equal(current.cart.length, 0);
   assert.equal(receipts.mock.callCount(), 1);
@@ -170,6 +172,73 @@ test('subscription fulfillment updates the tier and logs a simulated receipt onc
   assert.equal(await db.collection('transactions').countDocuments({ externalId: checkout.id }), 1);
   assert.equal(receipts.mock.callCount(), 1);
   assert.equal(JSON.parse(receipts.mock.calls[0].arguments[1]).subject, 'Your ArtHub membership');
+});
+test('unpublished artworks stay out of catalogs and cannot be added to cart or purchased', async () => {
+  const piece = await art(accounts.artist.user, { published: false });
+  for (const suffix of ['', '&available=false']) {
+    const catalog = await request(`/api/artworks?search=${tag}&limit=24${suffix}`);
+    assert.ok(!catalog.data.items.some(item => item._id === String(piece._id)));
+  }
+  assert.equal((await request(`/api/cart/${piece._id}`, { method: 'POST', cookie: accounts.buyer.cookie })).status, 409);
+  await assert.rejects(createCheckout(accounts.buyer.user, { type: 'purchase', artworkId: String(piece._id) }, stripe), /not published/);
+});
+test('publishing fees use server pricing and publish only after verified payment, with one simulated email', async (t) => {
+  const originalFee = config.publishingFee; config.publishingFee = 5;
+  const receipts = t.mock.method(console, 'info', () => {});
+  try {
+    assert.equal((await request('/api/config')).data.publishingFee, 5);
+    const input = { type: 'publishing', amount: 0, artwork: { title: `${tag} paid publication`, description: 'An original artwork awaiting a verified publishing fee payment.', image: 'https://example.com/publish.jpg', category: 'Digital', price: 120, sold: true, published: true } };
+    await assert.rejects(createCheckout(accounts.buyer.user, input, stripe), error => error.status === 403);
+    const result = await createCheckout(accounts.artist.user, input, stripe);
+    assert.match(result.url, /^https:\/\/checkout\.stripe\.com\//);
+    const order = await db.collection('orders').findOne({ userId: accounts.artist.user._id, type: 'publishing', status: 'pending' });
+    assert.equal(order.amount, 5);
+    assert.equal(await db.collection('artworks').findOne({ _id: order.artworkId }), null);
+    const checkout = sessions.get(order.stripeSessionId);
+    assert.equal(checkout.amount_total, 500);
+    assert.deepEqual(await fulfillCheckout(checkout.id, stripe), { status: 'pending' });
+    assert.equal(receipts.mock.callCount(), 0);
+    checkout.payment_status = 'paid'; checkout.status = 'complete'; checkout.amount_total = 1;
+    await assert.rejects(fulfillCheckout(checkout.id, stripe), /did not match/);
+    assert.equal(await db.collection('artworks').findOne({ _id: order.artworkId }), null);
+    checkout.amount_total = 500;
+    await Promise.all([fulfillCheckout(checkout.id, stripe), fulfillCheckout(checkout.id, stripe)]);
+    const published = await db.collection('artworks').findOne({ _id: order.artworkId });
+    assert.equal(published.published, true); assert.equal(published.sold, false);
+    assert.equal(String(published.artistId), String(accounts.artist.user._id));
+    assert.equal(published.price, 120);
+    assert.equal(await db.collection('transactions').countDocuments({ externalId: checkout.id, type: 'publishing', amount: 5 }), 1);
+    assert.equal(receipts.mock.callCount(), 1);
+    const receipt = JSON.parse(receipts.mock.calls[0].arguments[1]);
+    assert.equal(receipt.to, accounts.artist.user.email);
+    assert.equal(receipt.subject, 'Your ArtHub publishing fee payment');
+    assert.equal(receipt.amount, 5);
+    const catalog = await request(`/api/artworks?search=${encodeURIComponent(published.title)}`);
+    assert.equal(catalog.data.items[0]._id, String(order.artworkId));
+    const dashboard = await request('/api/dashboard', { cookie: accounts.artist.cookie });
+    assert.ok(!dashboard.data.transactions.some(tx => tx.type === 'publishing'));
+    assert.equal((await db.collection('users').findOne({ _id: accounts.artist.user._id })).purchaseCount, 0);
+  } finally { config.publishingFee = originalFee; }
+});
+test('canceled and failed publishing checkouts never publish artwork or send a receipt', async (t) => {
+  const originalFee = config.publishingFee; config.publishingFee = 5;
+  const receipts = t.mock.method(console, 'info', () => {});
+  try {
+    const input = { type: 'publishing', artwork: { title: `${tag} canceled publication`, description: 'An original artwork whose publishing fee will not be completed.', image: 'https://example.com/publish.jpg', category: 'Digital', price: 120 } };
+    await createCheckout(accounts.artist.user, input, stripe);
+    const order = await db.collection('orders').findOne({ userId: accounts.artist.user._id, type: 'publishing', status: 'pending' });
+    await releaseOrder(order._id);
+    const checkout = sessions.get(order.stripeSessionId); checkout.payment_status = 'paid';
+    await assert.rejects(fulfillCheckout(checkout.id, stripe), /support review/);
+    assert.equal(await db.collection('artworks').findOne({ _id: order.artworkId }), null);
+    failStripe = true;
+    await assert.rejects(createCheckout(accounts.artist.user, input, stripe), /Fixture checkout failure/);
+    assert.equal(await db.collection('orders').countDocuments({ userId: accounts.artist.user._id, type: 'publishing', status: 'pending' }), 0);
+    assert.equal(await db.collection('artworks').countDocuments({ title: input.artwork.title }), 0);
+    assert.equal(receipts.mock.callCount(), 0);
+    config.publishingFee = 0;
+    await assert.rejects(createCheckout(accounts.artist.user, input, stripe), /Publishing is free/);
+  } finally { config.publishingFee = originalFee; failStripe = false; }
 });
 test('password changes revoke previous sessions and admin roles are assigned server-side', async () => {
   const changed = await request('/api/profile/password', { method: 'PATCH', cookie: accounts.buyer.cookie, data: { currentPassword: 'Testing@123', password: 'Changed@123', confirmPassword: 'Changed@123' } }); assert.equal(changed.status, 200);
